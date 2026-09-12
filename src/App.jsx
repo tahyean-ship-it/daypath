@@ -44,7 +44,7 @@ let currentUserId = null;
 let PROJECTS_CACHE = [];
 let NO_PROJECT_CACHE = { id: NO_PROJECT_ID, label: "No project", color: "#9aa6a0", notes: [] };
 
-const BIN_DAYS = 30;
+const BIN_DAYS = 7;
 const binEntry = (kind, payload, meta = {}) => {
   const now = new Date();
   const expires = new Date(now); expires.setDate(expires.getDate() + BIN_DAYS);
@@ -1040,7 +1040,7 @@ function BinView({ refresh }) {
           <h1 style={S.viewTitle}>Bin</h1>
           {entries && entries.length > 0 && <button style={S.projDeleteBtn} onClick={empty}>Empty bin</button>}
         </div>
-        <p style={S.viewSub}>Kept for 30 days, then cleared.</p>
+        <p style={S.viewSub}>Kept for 7 days, then cleared.</p>
       </header>
       {entries === null && <div style={S.empty}>Loading…</div>}
       {entries && entries.length === 0 && <div style={S.empty}>The bin is empty.</div>}
