@@ -1,16 +1,31 @@
-# React + Vite
+# Daypath
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+A projects-first task manager: tasks live under projects, dated tasks group into an Upcoming timeline, undated tasks sit in Someday, and there's a lightweight expense tracker for things you need to claim back.
 
-Currently, two official plugins are available:
+Built with React + Vite, backed by [Supabase](https://supabase.com) (Postgres + Auth) with row-level security scoping every table to its owning user.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Local setup
 
-## React Compiler
+```bash
+npm install
+cp .env.example .env   # fill in your Supabase project URL + anon key
+npm run dev
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Environment variables
 
-## Expanding the Oxlint configuration
+| Variable | Where to find it |
+|---|---|
+| `VITE_SUPABASE_URL` | Supabase dashboard → Project Settings → API |
+| `VITE_SUPABASE_ANON_KEY` | Same page — the `anon` / `publishable` key, **not** the secret key |
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+## Database
+
+Tables: `projects`, `tasks`, `bin`, `expenses` — all with RLS policies restricting rows to `auth.uid() = user_id`. Two scheduled Postgres functions (via `pg_cron`) handle cleanup:
+
+- `archive_stale_done_tasks` — moves completed one-off tasks into the bin 7 days after completion
+- `purge_expired_bin` — permanently deletes bin entries past their 7-day expiry
+
+## Deployment
+
+Deploys to [Vercel](https://vercel.com) on every push to `main`. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` as environment variables in the Vercel project settings — the build won't work without them.

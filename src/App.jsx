@@ -1040,7 +1040,6 @@ function BinView({ refresh }) {
           <h1 style={S.viewTitle}>Bin</h1>
           {entries && entries.length > 0 && <button style={S.projDeleteBtn} onClick={empty}>Empty bin</button>}
         </div>
-        <p style={S.viewSub}>Kept for 7 days, then cleared.</p>
       </header>
       {entries === null && <div style={S.empty}>Loading…</div>}
       {entries && entries.length === 0 && <div style={S.empty}>The bin is empty.</div>}
