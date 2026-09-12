@@ -69,6 +69,8 @@ const toProjectRow = (p) => ({ id: p.id, user_id: currentUserId, label: p.label,
 const fromProjectRow = (r) => ({ id: r.id, label: r.label, color: r.color, notes: r.notes || [] });
 const toBinRow = (e) => ({ bin_id: e.binId, user_id: currentUserId, kind: e.kind, payload: e.payload, meta: e.meta, deleted_at: e.deletedAt, expires_at: e.expiresAt });
 const fromBinRow = (r) => ({ binId: r.bin_id, kind: r.kind, payload: r.payload, meta: r.meta, deletedAt: r.deleted_at, expiresAt: r.expires_at });
+const toExpenseRow = (e) => ({ id: e.id, user_id: currentUserId, name: e.name, date: e.date, amount: e.amount, claimed: !!e.claimed });
+const fromExpenseRow = (r) => ({ id: r.id, name: r.name, date: r.date, amount: Number(r.amount), claimed: !!r.claimed });
 const check = (error) => { if (error) throw new Error(error.message); };
 
 const api = {
@@ -207,6 +209,17 @@ const api = {
   },
   purgeFromBin: async (binId) => check((await supabase.from("bin").delete().eq("bin_id", binId)).error),
   emptyBin: async () => check((await supabase.from("bin").delete().not("bin_id", "is", null)).error),
+  loadExpenses: async () => {
+    const { data, error } = await supabase.from("expenses").select("*").order("date", { ascending: false });
+    check(error);
+    return (data || []).map(fromExpenseRow);
+  },
+  saveExpense: async (expense) => {
+    const { data, error } = await supabase.from("expenses").upsert(toExpenseRow(expense)).select().single();
+    check(error);
+    return fromExpenseRow(data);
+  },
+  deleteExpense: async (id) => check((await supabase.from("expenses").delete().eq("id", id)).error),
 };
 
 const nextOrder = () => ++ORDER_SEQ;
@@ -358,6 +371,7 @@ function App() {
   const [authReady, setAuthReady] = useState(false);
   const [tasks, setTasks] = useState([]);
   const [projects, setProjects] = useState([]);
+  const [expenses, setExpenses] = useState([]);
   const [view, setView] = useState({ type: "upcoming" });
   const [editing, setEditing] = useState(null);
   const [collapsed, setCollapsed] = useState(false);
@@ -379,7 +393,7 @@ function App() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  useEffect(() => { if (!user) return; api.loadTasks().then(setTasks); api.loadProjects().then(setProjects); }, [user]);
+  useEffect(() => { if (!user) return; api.loadTasks().then(setTasks); api.loadProjects().then(setProjects); api.loadExpenses().then(setExpenses); }, [user]);
 
   // Keyboard quick-add: press N (when not typing in a field) to open a new task.
   useEffect(() => {
@@ -394,7 +408,7 @@ function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [user]);
 
-  const refresh = async () => { setTasks(await api.loadTasks()); setProjects(await api.loadProjects()); };
+  const refresh = async () => { setTasks(await api.loadTasks()); setProjects(await api.loadProjects()); setExpenses(await api.loadExpenses()); };
   if (!authReady) return <div style={S.authWrap} />;
   if (!user) return <AuthScreen onAuthed={setUser} />;
 
@@ -410,10 +424,10 @@ function App() {
     <div style={S.shell}>
       <GlobalStyles />
       <Sidebar user={user} tasks={tasks} projects={projects} view={view} setView={setView}
-        onSignOut={async () => { await supabase.auth.signOut(); setUser(null); setTasks([]); setProjects([]); }} collapsed={collapsed} setCollapsed={setCollapsed}
+        onSignOut={async () => { await supabase.auth.signOut(); setUser(null); setTasks([]); setProjects([]); setExpenses([]); }} collapsed={collapsed} setCollapsed={setCollapsed}
         dragTask={dragTask} onDropDate={moveTaskToDate} refresh={refresh} search={search} setSearch={setSearch} />
       <div style={S.content}>
-        {view.type === "upcoming" && <UpcomingView tasks={tasks} projects={projects} refresh={refresh} openEditor={setEditing} goToDay={(d) => setView({ type: "day", date: d })} setDragTask={setDragTask} />}
+        {view.type === "upcoming" && <UpcomingView tasks={tasks} projects={projects} expenses={expenses} refresh={refresh} openEditor={setEditing} goToDay={(d) => setView({ type: "day", date: d })} setDragTask={setDragTask} />}
         {view.type === "day" && <DayView date={view.date} setView={setView} tasks={tasks} projects={projects} refresh={refresh} openEditor={setEditing} setDragTask={setDragTask} />}
         {view.type === "project" && <ProjectView projectId={view.id} tasks={tasks} projects={projects} refresh={refresh} openEditor={setEditing} setDragTask={setDragTask} setView={setView} />}
         {view.type === "bin" && <BinView refresh={refresh} />}
@@ -648,7 +662,7 @@ function useReorder(items, onCommit) {
 // ============================================================================
 // UPCOMING (dated tasks soonest-first, then a pinned "No date" section)
 // ============================================================================
-function UpcomingView({ tasks, projects, refresh, openEditor, goToDay, setDragTask }) {
+function UpcomingView({ tasks, projects, expenses, refresh, openEditor, goToDay, setDragTask }) {
   const t0 = today();
   // Overdue: non-recurring dated tasks whose date is before today and not done.
   const overdue = useMemo(() => {
@@ -732,24 +746,81 @@ function UpcomingView({ tasks, projects, refresh, openEditor, goToDay, setDragTa
           </div>
         </div>
 
-        <aside style={S.somedayCol}>
-          <div style={{ ...S.somedayColHead, marginBottom: 16 }}>
-            <span style={S.somedayColTitle}>◇ Someday</span>
-            {someday.length > 0 && <span style={S.somedayColCount}>{someday.length}</span>}
-          </div>
-          <div style={S.list}>
-            {someday.length === 0 && <div style={S.colEmpty}>Empty</div>}
-            {someday.map((task) => (
-              <TaskCard key={task.id} task={task} date={null} projects={projects} done={false}
-                onToggle={async () => { await api.saveTask({ ...task, doneDates: (task.doneDates || []).length ? [] : [today()] }); refresh(); }}
-                onOpen={() => openEditor(task)} refresh={refresh}
-                draggable onDragStartTask={(e, t) => { setDragTask(t); e.dataTransfer.effectAllowed = "move"; }}
-                dragHandlers={{ onDragEnd: () => setDragTask(null) }} />
-            ))}
-          </div>
-        </aside>
+        <div style={S.sideCol}>
+          <aside style={S.somedayCol}>
+            <div style={{ ...S.somedayColHead, marginBottom: 16 }}>
+              <span style={S.somedayColTitle}>◇ Someday</span>
+              {someday.length > 0 && <span style={S.somedayColCount}>{someday.length}</span>}
+            </div>
+            <div style={S.list}>
+              {someday.length === 0 && <div style={S.colEmpty}>Empty</div>}
+              {someday.map((task) => (
+                <TaskCard key={task.id} task={task} date={null} projects={projects} done={false}
+                  onToggle={async () => { await api.saveTask({ ...task, doneDates: (task.doneDates || []).length ? [] : [today()] }); refresh(); }}
+                  onOpen={() => openEditor(task)} refresh={refresh}
+                  draggable onDragStartTask={(e, t) => { setDragTask(t); e.dataTransfer.effectAllowed = "move"; }}
+                  dragHandlers={{ onDragEnd: () => setDragTask(null) }} />
+              ))}
+            </div>
+          </aside>
+          <ExpensesBox expenses={expenses} refresh={refresh} />
+        </div>
       </div>
     </main>
+  );
+}
+
+// ============================================================================
+// EXPENSES (name + date + amount; check off once claimed back)
+// ============================================================================
+function ExpensesBox({ expenses, refresh }) {
+  const [name, setName] = useState("");
+  const [date, setDate] = useState(today());
+  const [amount, setAmount] = useState("");
+
+  const sorted = useMemo(() => {
+    const pending = expenses.filter((e) => !e.claimed).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+    const claimed = expenses.filter((e) => e.claimed).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+    return [...pending, ...claimed];
+  }, [expenses]);
+  const pendingTotal = useMemo(() => expenses.filter((e) => !e.claimed).reduce((sum, e) => sum + (Number(e.amount) || 0), 0), [expenses]);
+
+  const add = async () => {
+    const amt = Number(amount);
+    if (!name.trim() || !amt || amt <= 0) return;
+    await api.saveExpense({ id: crypto.randomUUID(), name: name.trim(), date, amount: amt, claimed: false });
+    setName(""); setAmount(""); refresh();
+  };
+  const toggleClaimed = async (exp) => { await api.saveExpense({ ...exp, claimed: !exp.claimed }); refresh(); };
+  const remove = async (id) => { await api.deleteExpense(id); refresh(); };
+
+  return (
+    <aside style={S.expensesCol}>
+      <div style={{ ...S.expensesColHead, marginBottom: 14 }}>
+        <span style={S.expensesColTitle}>◈ Expenses</span>
+        {pendingTotal > 0 && <span style={S.expensesColCount}>£{pendingTotal.toFixed(2)} to claim</span>}
+      </div>
+      <div style={S.expenseComposer}>
+        <input style={S.expenseNameInput} placeholder="What was it?" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
+        <input type="date" style={S.expenseDateInput} value={date} onChange={(e) => setDate(e.target.value)} />
+        <input type="number" min="0" step="0.01" style={S.expenseAmountInput} placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
+        <button style={S.smallBtn} onClick={add}>Add</button>
+      </div>
+      <div style={S.list}>
+        {sorted.length === 0 && <div style={S.colEmpty}>Empty</div>}
+        {sorted.map((exp) => (
+          <div key={exp.id} style={{ ...S.expenseRow, ...(exp.claimed ? S.expenseRowClaimed : {}) }}>
+            <button className="dp-check" style={{ ...S.check, ...(exp.claimed ? S.checkOn : {}) }} onClick={() => toggleClaimed(exp)} title="Mark claimed back">{exp.claimed ? "✓" : ""}</button>
+            <div style={S.expenseBody}>
+              <div style={{ ...S.expenseName, ...(exp.claimed ? S.strike : {}) }}>{exp.name}</div>
+              <div style={S.expenseMeta}>{fmtShort(exp.date)}</div>
+            </div>
+            <div style={S.expenseAmount}>£{Number(exp.amount).toFixed(2)}</div>
+            <button style={S.delBtn} onClick={() => remove(exp.id)} title="Delete">✕</button>
+          </div>
+        ))}
+      </div>
+    </aside>
   );
 }
 
@@ -1312,11 +1383,27 @@ const S = {
 
   upcomingCols: { display: "flex", gap: 36, alignItems: "flex-start", flexWrap: "wrap" },
   upcomingMain: { flex: "1 1 460px", minWidth: 0 },
-  somedayCol: { flex: "0 1 300px", minWidth: 260, background: "#f3f8fd", borderRadius: 16, padding: "14px 18px 20px", border: "1px solid #e1ebf7" },
+  sideCol: { display: "flex", flexDirection: "column", gap: 20, flex: "0 1 300px", minWidth: 260 },
+  somedayCol: { background: "#f3f8fd", borderRadius: 16, padding: "14px 18px 20px", border: "1px solid #e1ebf7" },
   somedayColHead: { display: "flex", alignItems: "center", gap: 9 },
   somedayColTitle: { fontSize: 16, fontWeight: 700, color: "#3a6ba8", letterSpacing: "-0.3px" },
   somedayColCount: { fontSize: 12, color: "#3f7bbf", background: "#d6e6fa", borderRadius: 10, padding: "1px 8px", fontWeight: 600 },
   colEmpty: { fontSize: 13.5, color: "#aab09c", padding: "8px 2px", fontStyle: "italic" },
+
+  expensesCol: { background: "#f0f9f4", borderRadius: 16, padding: "14px 18px 20px", border: "1px solid #dcefe1" },
+  expensesColHead: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 9, flexWrap: "wrap" },
+  expensesColTitle: { fontSize: 16, fontWeight: 700, color: "#2f8a5b", letterSpacing: "-0.3px" },
+  expensesColCount: { fontSize: 11.5, color: "#2f8a5b", background: "#d9f0e2", borderRadius: 10, padding: "2px 9px", fontWeight: 700, whiteSpace: "nowrap" },
+  expenseComposer: { display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" },
+  expenseNameInput: { flex: "1 1 100px", minWidth: 90, border: "1px solid #cfe6d7", borderRadius: 9, padding: "8px 10px", fontSize: 13.5, fontFamily: SANS, background: SURFACE, outline: "none", color: "#1c1917" },
+  expenseDateInput: { border: "1px solid #cfe6d7", borderRadius: 9, padding: "8px 8px", fontSize: 12.5, fontFamily: SANS, background: SURFACE, color: "#5c5247", outline: "none" },
+  expenseAmountInput: { width: 72, border: "1px solid #cfe6d7", borderRadius: 9, padding: "8px 8px", fontSize: 13.5, fontFamily: SANS, background: SURFACE, outline: "none", color: "#1c1917" },
+  expenseRow: { display: "flex", alignItems: "center", gap: 10, background: SURFACE, padding: "10px 12px", borderRadius: 11, border: "1px solid rgba(0,0,0,0.05)" },
+  expenseRowClaimed: { opacity: 0.5 },
+  expenseBody: { flex: 1, minWidth: 0 },
+  expenseName: { fontSize: 14, fontWeight: 600, color: "#1c1917", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  expenseMeta: { fontSize: 11.5, color: "#a99c8b", marginTop: 2 },
+  expenseAmount: { fontSize: 13.5, fontWeight: 700, color: "#2f8a5b", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" },
 
   projGroups: { display: "flex", flexDirection: "column", gap: 22 },
   projGroup: {},
