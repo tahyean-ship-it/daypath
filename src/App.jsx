@@ -15,13 +15,23 @@ const RECUR = [
   { id: "monthly", label: "Every month" },
 ];
 
-const PROJECT_COLORS = ["#f0806c", "#3bb89a", "#6c9ee8", "#f2a65a", "#b884d8", "#e86b9e", "#4ec0c0", "#f5c451"];
+// Ordered so neighbouring entries stay visually distinct: colours are handed
+// out in sequence, so consecutive projects shouldn't look alike.
+const PROJECT_COLORS = [
+  "#f0806c", "#3bb89a", "#6c9ee8", "#f2a65a", "#b884d8", "#e86b9e",
+  "#4ec0c0", "#f5c451", "#7fb069", "#7d83d8", "#e2725b", "#45a29e",
+  "#cf8ba9", "#a3b565", "#5b8ff9", "#d4a373", "#9b7ede", "#52b788",
+  "#ef9d8a", "#6ac1d9", "#c9a227", "#8d9db6", "#dd7373", "#57a773",
+];
 // Not a real project: a reserved row (fixed id) that only holds the "No
 // project" bucket's notes, so the app doesn't need a nullable-FK edge case
 // in the tasks table. Filtered out of every normal project listing below.
 const NO_PROJECT_ID = "00000000-0000-0000-0000-000000000000";
 
-const iso = (d) => d.toISOString().slice(0, 10);
+// Local calendar date, not UTC: every date string in the app is parsed back as
+// local midnight, so formatting via toISOString() would shift the day for
+// anyone east of UTC (e.g. BST puts local midnight at 23:00 the day before).
+const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const today = () => iso(new Date());
 const addDays = (dateStr, n) => { const d = new Date(dateStr + "T00:00:00"); d.setDate(d.getDate() + n); return iso(d); };
 const fmtLong = (s) => new Date(s + "T00:00:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
@@ -138,7 +148,9 @@ const api = {
   },
   getProject: (id) => (id === NO_PROJECT_ID ? NO_PROJECT_CACHE : PROJECTS_CACHE.find((p) => p.id === id)),
   addProject: async (label) => {
-    const color = PROJECT_COLORS[PROJECTS_CACHE.length % PROJECT_COLORS.length];
+    // Prefer a colour nothing else is using; only repeat once they're all taken.
+    const used = new Set(PROJECTS_CACHE.map((p) => p.color));
+    const color = PROJECT_COLORS.find((c) => !used.has(c)) || PROJECT_COLORS[PROJECTS_CACHE.length % PROJECT_COLORS.length];
     const p = { id: crypto.randomUUID(), label, color, notes: [] };
     check((await supabase.from("projects").insert(toProjectRow(p))).error);
     return p;
@@ -580,7 +592,10 @@ function TaskCard({ task, date, projects, onToggle, onOpen, refresh, done, dragg
   const deleteSeries = async () => { await api.deleteTask(task.id); setDelChoice(false); refresh(); };
   return (
     <div className="dp-card" draggable={draggable} onDragStart={(e) => { if (onDragStartTask) onDragStartTask(e, { ...task, __occDate: date || null }); }} {...(dragHandlers || {})}
-      style={{ ...S.card, ...(done ? S.cardDone : {}), ...(project ? { borderLeft: `3px solid ${project.color}` } : {}) }}>
+      style={{ ...S.card, ...(done ? S.cardDone : {}), ...(project ? { borderLeft: `3px solid ${project.color}` } : {}),
+        // The hover transform makes each card its own stacking context, which
+        // would otherwise let later cards paint over this one's open menu.
+        ...(moving || delChoice ? { zIndex: 30 } : {}) }}>
       {draggable && <span style={S.grip} title="Drag to reorder or onto a day">⠿</span>}
       <button className="dp-check" style={{ ...S.check, ...(done ? S.checkOn : {}) }} onClick={onToggle}>{done ? "✓" : ""}</button>
       <div style={S.cardBody} onClick={onOpen}>
@@ -777,6 +792,10 @@ function ExpensesBox({ expenses, refresh }) {
   const [name, setName] = useState("");
   const [date, setDate] = useState(today());
   const [amount, setAmount] = useState("");
+  const [editingId, setEditingId] = useState(null);
+  const [editName, setEditName] = useState("");
+  const [editDate, setEditDate] = useState(today());
+  const [editAmount, setEditAmount] = useState("");
 
   const sorted = useMemo(() => {
     const pending = expenses.filter((e) => !e.claimed).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
@@ -794,6 +813,15 @@ function ExpensesBox({ expenses, refresh }) {
   const toggleClaimed = async (exp) => { await api.saveExpense({ ...exp, claimed: !exp.claimed }); refresh(); };
   const remove = async (id) => { await api.deleteExpense(id); refresh(); };
 
+  const startEdit = (exp) => { setEditingId(exp.id); setEditName(exp.name); setEditDate(exp.date); setEditAmount(String(exp.amount)); };
+  const cancelEdit = () => setEditingId(null);
+  const saveEdit = async (exp) => {
+    const amt = Number(editAmount);
+    if (!editName.trim() || !amt || amt <= 0) { setEditingId(null); return; }
+    await api.saveExpense({ ...exp, name: editName.trim(), date: editDate, amount: amt });
+    setEditingId(null); refresh();
+  };
+
   return (
     <aside style={S.expensesCol}>
       <div style={{ ...S.expensesColHead, marginBottom: 14 }}>
@@ -809,15 +837,32 @@ function ExpensesBox({ expenses, refresh }) {
       <div style={S.list}>
         {sorted.length === 0 && <div style={S.colEmpty}>Empty</div>}
         {sorted.map((exp) => (
-          <div key={exp.id} style={{ ...S.expenseRow, ...(exp.claimed ? S.expenseRowClaimed : {}) }}>
-            <button className="dp-check" style={{ ...S.check, ...(exp.claimed ? S.checkOn : {}) }} onClick={() => toggleClaimed(exp)} title="Mark claimed back">{exp.claimed ? "✓" : ""}</button>
-            <div style={S.expenseBody}>
-              <div style={{ ...S.expenseName, ...(exp.claimed ? S.strike : {}) }}>{exp.name}</div>
-              <div style={S.expenseMeta}>{fmtShort(exp.date)}</div>
+          editingId === exp.id ? (
+            <div key={exp.id} style={S.expenseEditRow}>
+              <input autoFocus style={S.expenseNameInput} value={editName} onChange={(e) => setEditName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") saveEdit(exp); if (e.key === "Escape") cancelEdit(); }} />
+              <input type="date" style={S.expenseDateInput} value={editDate} onChange={(e) => setEditDate(e.target.value)} />
+              <input type="number" min="0" step="0.01" style={S.expenseAmountInput} value={editAmount} onChange={(e) => setEditAmount(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") saveEdit(exp); if (e.key === "Escape") cancelEdit(); }} />
+              <button style={S.smallBtn} onClick={() => saveEdit(exp)}>Save</button>
+              <button style={S.ghostBtnSm} onClick={cancelEdit}>Cancel</button>
             </div>
-            <div style={S.expenseAmount}>£{Number(exp.amount).toFixed(2)}</div>
-            <button style={S.delBtn} onClick={() => remove(exp.id)} title="Delete">✕</button>
-          </div>
+          ) : (
+            <div key={exp.id} style={{ ...S.expenseRow, ...(exp.claimed ? S.expenseRowClaimed : {}) }}>
+              <button className="dp-check" style={{ ...S.check, ...(exp.claimed ? S.checkOn : {}) }} onClick={() => toggleClaimed(exp)} title="Mark claimed back">{exp.claimed ? "✓" : ""}</button>
+              <div style={{ ...S.expenseBody, cursor: "pointer" }} onClick={() => startEdit(exp)} title="Click to edit">
+                <div style={{ ...S.expenseName, ...(exp.claimed ? S.strike : {}) }}>{exp.name}</div>
+                <div style={S.expenseMeta}>{fmtShort(exp.date)}</div>
+              </div>
+              <div style={S.expenseSide}>
+                <div style={S.expenseAmount}>£{Number(exp.amount).toFixed(2)}</div>
+                <div style={S.expenseSideActions}>
+                  <button style={S.expenseEdit} onClick={() => startEdit(exp)} title="Edit expense">Edit</button>
+                  <button style={S.delBtn} onClick={() => remove(exp.id)} title="Delete">✕</button>
+                </div>
+              </div>
+            </div>
+          )
         ))}
       </div>
     </aside>
@@ -1180,7 +1225,6 @@ function TaskEditor({ task, defaultDate, defaultProject, projects, refresh, onCl
   const [recurEndCount, setRecurEndCount] = useState(task?.recurEndCount || 10);
   const [newProj, setNewProj] = useState("");
   const [showNewProj, setShowNewProj] = useState(false);
-  const [localProjects, setLocalProjects] = useState(sorted);
 
   const save = async () => {
     if (!title.trim()) return;
@@ -1198,7 +1242,12 @@ function TaskEditor({ task, defaultDate, defaultProject, projects, refresh, onCl
     refresh(); onClose();
   };
   const remove = async () => { if (task) { await api.deleteTask(task.id); refresh(); onClose(); } };
-  const createProject = async () => { if (!newProj.trim()) return; const p = await api.addProject(newProj.trim()); setLocalProjects(alphaProjects([...localProjects, p])); setProject(p.id); setNewProj(""); setShowNewProj(false); };
+  const createProject = async () => {
+    if (!newProj.trim()) return;
+    const p = await api.addProject(newProj.trim());
+    await refresh();
+    setProject(p.id); setNewProj(""); setShowNewProj(false);
+  };
 
   return (
     <div className="dp-overlay" style={S.overlay} onClick={onClose}>
@@ -1208,14 +1257,16 @@ function TaskEditor({ task, defaultDate, defaultProject, projects, refresh, onCl
           <label style={S.fieldLabel}>Project</label>
           {showNewProj ? (
             <div style={S.newProjRow}>
-              <input autoFocus style={S.fieldInput} placeholder="New project name" value={newProj} onChange={(e) => setNewProj(e.target.value)} onKeyDown={(e) => e.key === "Enter" && createProject()} />
+              <input autoFocus style={S.fieldInput} placeholder="New project name" value={newProj} onChange={(e) => setNewProj(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") createProject(); if (e.key === "Escape") { setShowNewProj(false); setNewProj(""); } }} />
               <button style={S.smallBtn} onClick={createProject}>Add</button>
+              <button style={S.ghostBtnSm} onClick={() => { setShowNewProj(false); setNewProj(""); }}>Cancel</button>
             </div>
           ) : (
             <div style={S.projRow}>
               <select style={S.fieldInput} value={project} onChange={(e) => setProject(e.target.value)}>
                 <option value="">No project</option>
-                {localProjects.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+                {sorted.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
               </select>
               <button style={S.smallBtn} onClick={() => setShowNewProj(true)}>+ New</button>
             </div>
@@ -1398,10 +1449,14 @@ const S = {
   expenseDateInput: { border: "1px solid #cfe6d7", borderRadius: 9, padding: "8px 8px", fontSize: 12.5, fontFamily: SANS, background: SURFACE, color: "#5c5247", outline: "none" },
   expenseAmountInput: { width: 72, border: "1px solid #cfe6d7", borderRadius: 9, padding: "8px 8px", fontSize: 13.5, fontFamily: SANS, background: SURFACE, outline: "none", color: "#1c1917" },
   expenseRow: { display: "flex", alignItems: "center", gap: 10, background: SURFACE, padding: "10px 12px", borderRadius: 11, border: "1px solid rgba(0,0,0,0.05)" },
+  expenseEditRow: { display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", background: SURFACE, padding: "10px 12px", borderRadius: 11, border: "1px solid #cfe6d7" },
+  expenseEdit: { border: "none", background: "none", color: "#4f9e77", cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: SANS, padding: "2px 4px" },
   expenseRowClaimed: { opacity: 0.5 },
   expenseBody: { flex: 1, minWidth: 0 },
   expenseName: { fontSize: 14, fontWeight: 600, color: "#1c1917", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-  expenseMeta: { fontSize: 11.5, color: "#a99c8b", marginTop: 2 },
+  expenseMeta: { fontSize: 11.5, color: "#a99c8b", marginTop: 2, whiteSpace: "nowrap" },
+  expenseSide: { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1, flexShrink: 0 },
+  expenseSideActions: { display: "flex", alignItems: "center", gap: 2 },
   expenseAmount: { fontSize: 13.5, fontWeight: 700, color: "#2f8a5b", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" },
 
   projGroups: { display: "flex", flexDirection: "column", gap: 22 },
