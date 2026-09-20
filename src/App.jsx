@@ -283,6 +283,10 @@ function upcomingOccurrences(task, fromDate, horizonDays = 400) {
 const isDone = (task, dateStr) => (task.doneDates || []).includes(dateStr);
 const byOrder = (a, b) => (a.order || 0) - (b.order || 0);
 
+// Where a card sits in a run of sibling tasks, so a project's tasks render as
+// one block instead of separate cards. null when it stands alone.
+const stackPos = (i, len) => (len < 2 ? null : i === 0 ? "first" : i === len - 1 ? "last" : "middle");
+
 // Group a list of tasks under their projects, projects alphabetical, an
 // "Unassigned" bucket last. Returns [{project|null, tasks:[]}].
 function groupByProject(tasks, projects) {
@@ -329,6 +333,10 @@ function GlobalStyles() {
       }
       .dp-card { transition: box-shadow .15s ease, transform .15s ease, border-color .15s ease, opacity .2s ease; }
       .dp-card:hover { box-shadow: 0 4px 14px rgba(45,75,65,.10) !important; transform: translateY(-1px); border-color: rgba(0,0,0,.12) !important; }
+      /* Cards joined into a project block: lifting one would break the seam. */
+      .dp-stacked:hover { transform: none; box-shadow: none !important; background: #f6faf8 !important; }
+      .dp-stacked { position: relative; }
+      .dp-stacked:hover { z-index: 2; }
       .dp-check:hover { border-color: #f0806c !important; }
       .dp-navhover:not(.dp-active):hover { background: #f2f5f9 !important; }
       .dp-fab { transition: transform .15s ease, box-shadow .2s ease; }
@@ -572,11 +580,18 @@ function Sidebar({ user, tasks, projects, view, setView, onSignOut, collapsed, s
 }
 
 // ============================================================================
-function TaskCard({ task, date, projects, onToggle, onOpen, refresh, done, draggable, onDragStartTask, dragHandlers, showProjectChip = true }) {
+function TaskCard({ task, date, projects, onToggle, onOpen, refresh, done, draggable, onDragStartTask, dragHandlers, showProjectChip = true, stack = null }) {
   const project = projects.find((p) => p.id === task.project);
   const [moving, setMoving] = useState(false);
   const [delChoice, setDelChoice] = useState(false);
   const isRecurring = task.recur && task.recur !== "none";
+  // Square off the joins and overlap the borders so a run of cards reads as
+  // one block; each row keeps its own check, move and delete controls.
+  const stackStyle = stack ? {
+    borderRadius: stack === "first" ? "13px 13px 0 0" : stack === "last" ? "0 0 13px 13px" : 0,
+    ...(stack === "first" ? {} : { marginTop: -1 }),
+    ...(stack === "last" ? {} : { boxShadow: "none" }),
+  } : {};
   const move = async (newDate) => {
     if (isRecurring && date) await api.moveOccurrence(task.id, date, newDate);
     else await api.saveTask({ ...task, date: newDate, order: nextOrder() });
@@ -591,8 +606,8 @@ function TaskCard({ task, date, projects, onToggle, onOpen, refresh, done, dragg
   const skipThis = async () => { await api.skipOccurrence(task.id, date); setDelChoice(false); refresh(); };
   const deleteSeries = async () => { await api.deleteTask(task.id); setDelChoice(false); refresh(); };
   return (
-    <div className="dp-card" draggable={draggable} onDragStart={(e) => { if (onDragStartTask) onDragStartTask(e, { ...task, __occDate: date || null }); }} {...(dragHandlers || {})}
-      style={{ ...S.card, ...(done ? S.cardDone : {}), ...(project ? { borderLeft: `3px solid ${project.color}` } : {}),
+    <div className={"dp-card" + (stack ? " dp-stacked" : "")} draggable={draggable} onDragStart={(e) => { if (onDragStartTask) onDragStartTask(e, { ...task, __occDate: date || null }); }} {...(dragHandlers || {})}
+      style={{ ...S.card, ...(done ? S.cardDone : {}), ...(project ? { borderLeft: `3px solid ${project.color}` } : {}), ...stackStyle,
         // The hover transform makes each card its own stacking context, which
         // would otherwise let later cards paint over this one's open menu.
         ...(moving || delChoice ? { zIndex: 30 } : {}) }}>
@@ -718,12 +733,15 @@ function UpcomingView({ tasks, projects, expenses, refresh, openEditor, goToDay,
                         <span style={{ ...S.tlProjDot, background: pg.project ? pg.project.color : "#9aa6a0" }} />
                         <span style={S.tlProjName}>{pg.project ? pg.project.label : "No project"}</span>
                       </div>
-                      {pg.tasks.map((task) => (
-                        <TaskCard key={task.id} task={task} date={task.date} projects={projects} done={false} showProjectChip={false}
-                          onToggle={() => toggle(task, task.date)} onOpen={() => openEditor(task)} refresh={refresh}
-                          draggable onDragStartTask={(e, t) => { setDragTask(t); e.dataTransfer.effectAllowed = "move"; }}
-                          dragHandlers={{ onDragEnd: () => setDragTask(null) }} />
-                      ))}
+                      <div style={S.taskStack}>
+                        {pg.tasks.map((task, i) => (
+                          <TaskCard key={task.id} task={task} date={task.date} projects={projects} done={false} showProjectChip={false}
+                            stack={stackPos(i, pg.tasks.length)}
+                            onToggle={() => toggle(task, task.date)} onOpen={() => openEditor(task)} refresh={refresh}
+                            draggable onDragStartTask={(e, t) => { setDragTask(t); e.dataTransfer.effectAllowed = "move"; }}
+                            dragHandlers={{ onDragEnd: () => setDragTask(null) }} />
+                        ))}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -745,12 +763,15 @@ function UpcomingView({ tasks, projects, expenses, refresh, openEditor, goToDay,
                           <span style={{ ...S.tlProjDot, background: pg.project ? pg.project.color : "#9c958a" }} />
                           <span style={S.tlProjName}>{pg.project ? pg.project.label : "No project"}</span>
                         </div>
-                        {pg.tasks.map((task) => (
-                          <TaskCard key={task.id + grp.date} task={task} date={grp.date} projects={projects} done={false} showProjectChip={false}
-                            onToggle={() => toggle(task, grp.date)} onOpen={() => openEditor(task)} refresh={refresh}
-                            draggable onDragStartTask={(e, t) => { setDragTask(t); e.dataTransfer.effectAllowed = "move"; }}
-                            dragHandlers={{ onDragEnd: () => setDragTask(null) }} />
-                        ))}
+                        <div style={S.taskStack}>
+                          {pg.tasks.map((task, i) => (
+                            <TaskCard key={task.id + grp.date} task={task} date={grp.date} projects={projects} done={false} showProjectChip={false}
+                              stack={stackPos(i, pg.tasks.length)}
+                              onToggle={() => toggle(task, grp.date)} onOpen={() => openEditor(task)} refresh={refresh}
+                              draggable onDragStartTask={(e, t) => { setDragTask(t); e.dataTransfer.effectAllowed = "move"; }}
+                              dragHandlers={{ onDragEnd: () => setDragTask(null) }} />
+                          ))}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -926,10 +947,11 @@ function DayProjectGroup({ group, date, projects, refresh, openEditor, setDragTa
         <span style={S.projGroupCount}>{tasks.length}</span>
       </div>
       <div style={S.projGroupItems}>
-        {tasks.map((task) => (
+        {tasks.map((task, i) => (
           <div key={task.id} onDragOver={(e) => reorder.over(e, task)} onDrop={(e) => reorder.drop(e, task)}
             style={{ ...(reorder.overId === task.id && reorder.dragId !== task.id ? S.dropLine : {}), ...(reorder.dragId === task.id ? { opacity: 0.4 } : {}) }}>
             <TaskCard task={task} date={date} projects={projects} done={false} showProjectChip={false}
+              stack={stackPos(i, tasks.length)}
               onToggle={() => onToggle(task)} onOpen={() => openEditor(task)} refresh={refresh}
               draggable onDragStartTask={(e, t) => { reorder.start(e, t); setDragTask(t); }}
               dragHandlers={{ onDragEnd: () => { reorder.end(); setDragTask(null); } }} />
@@ -1426,6 +1448,7 @@ const S = {
   tlDateSub: { display: "block", fontSize: 11.5, color: "#a99c8b", marginTop: 2 },
   tlItems: { flex: 1, display: "flex", flexDirection: "column", gap: 14 },
   tlProjGroup: { display: "flex", flexDirection: "column", gap: 6 },
+  taskStack: { display: "flex", flexDirection: "column" },
   tlProjHead: { display: "flex", alignItems: "center", gap: 8, marginBottom: 1 },
   tlProjDot: { width: 9, height: 9, borderRadius: "50%", flexShrink: 0 },
   tlProjName: { fontSize: 12.5, fontWeight: 700, color: "#6f6a5f", letterSpacing: "-0.2px" },
@@ -1465,7 +1488,7 @@ const S = {
   projGroupDot: { width: 11, height: 11, borderRadius: "50%", flexShrink: 0 },
   projGroupTitle: { fontSize: 16, fontWeight: 700, color: "#1c1917", letterSpacing: "-0.3px", border: "none", background: "none", padding: 0, cursor: "pointer", fontFamily: SANS },
   projGroupCount: { fontSize: 12, color: "#a99c8b", background: "#eef2f7", borderRadius: 10, padding: "1px 8px", fontWeight: 600 },
-  projGroupItems: { display: "flex", flexDirection: "column", gap: 8 },
+  projGroupItems: { display: "flex", flexDirection: "column" },
 
   card: { display: "flex", alignItems: "flex-start", gap: 12, background: SURFACE, padding: "14px 15px", borderRadius: 13, border: "1px solid rgba(0,0,0,0.08)", boxShadow: "0 1px 3px rgba(45,75,65,0.07)", position: "relative" },
   cardDone: { opacity: 0.5 },
