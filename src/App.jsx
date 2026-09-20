@@ -348,9 +348,9 @@ function GlobalStyles() {
       @keyframes dp-rise { from { opacity: 0; transform: translateY(14px) scale(.985) } to { opacity: 1; transform: none } }
       @keyframes dp-pop { from { opacity: 0; transform: scale(.96) } to { opacity: 1; transform: none } }
       .dp-timeline { position: relative; }
-      .dp-timeline::before { content: ""; position: absolute; left: 106px; top: 22px; bottom: 10px; width: 2px; border-radius: 1px; background: #e3edf9; }
+      .dp-timeline::before { content: ""; position: absolute; left: 134px; top: 22px; bottom: 10px; width: 2px; border-radius: 1px; background: #e3edf9; }
       .dp-tlgroup { position: relative; }
-      .dp-tlgroup::before { content: ""; position: absolute; left: 101px; top: 19px; width: 12px; height: 12px; border-radius: 50%; background: #fff; border: 2.5px solid #7ba8e0; box-sizing: border-box; z-index: 1; }
+      .dp-tlgroup::before { content: ""; position: absolute; left: 129px; top: 19px; width: 12px; height: 12px; border-radius: 50%; background: #fff; border: 2.5px solid #7ba8e0; box-sizing: border-box; z-index: 1; }
       .dp-tlgroup.dp-overdue::before { border-color: #f0806c; }
       @media (max-width: 720px) { .dp-timeline::before, .dp-tlgroup::before { display: none; } }
       @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
@@ -1443,15 +1443,15 @@ const S = {
   empty: { padding: "50px 0", color: "#bcae9d", fontSize: 15.5, textAlign: "center", maxWidth: 520 },
   timeline: { display: "flex", flexDirection: "column", gap: 24 },
   tlGroup: { display: "flex", gap: 22, alignItems: "flex-start" },
-  tlDate: { flexShrink: 0, width: 96, textAlign: "right", border: "none", background: "none", cursor: "pointer", paddingTop: 14, fontFamily: SANS },
-  tlDateMain: { display: "block", fontSize: 14, fontWeight: 700, color: "#1c1917", letterSpacing: "-0.3px" },
-  tlDateSub: { display: "block", fontSize: 11.5, color: "#a99c8b", marginTop: 2 },
+  tlDate: { flexShrink: 0, width: 124, textAlign: "right", border: "none", background: "none", cursor: "pointer", paddingTop: 14, fontFamily: SANS },
+  tlDateMain: { display: "block", fontSize: 18, fontWeight: 700, color: "#1c1917", letterSpacing: "-0.4px" },
+  tlDateSub: { display: "block", fontSize: 12, color: "#a99c8b", marginTop: 2 },
   tlItems: { flex: 1, display: "flex", flexDirection: "column", gap: 14 },
   tlProjGroup: { display: "flex", flexDirection: "column", gap: 6 },
   taskStack: { display: "flex", flexDirection: "column" },
   tlProjHead: { display: "flex", alignItems: "center", gap: 8, marginBottom: 1 },
-  tlProjDot: { width: 9, height: 9, borderRadius: "50%", flexShrink: 0 },
-  tlProjName: { fontSize: 12.5, fontWeight: 700, color: "#6f6a5f", letterSpacing: "-0.2px" },
+  tlProjDot: { width: 10, height: 10, borderRadius: "50%", flexShrink: 0 },
+  tlProjName: { fontSize: 16.5, fontWeight: 700, color: "#3c352d", letterSpacing: "-0.3px" },
   list: { display: "flex", flexDirection: "column", gap: 8 },
 
   upcomingCols: { display: "flex", gap: 36, alignItems: "flex-start", flexWrap: "wrap" },
@@ -1459,13 +1459,13 @@ const S = {
   sideCol: { display: "flex", flexDirection: "column", gap: 20, flex: "0 1 300px", minWidth: 260 },
   somedayCol: { background: "#f3f8fd", borderRadius: 16, padding: "14px 18px 20px", border: "1px solid #e1ebf7" },
   somedayColHead: { display: "flex", alignItems: "center", gap: 9 },
-  somedayColTitle: { fontSize: 16, fontWeight: 700, color: "#3a6ba8", letterSpacing: "-0.3px" },
+  somedayColTitle: { fontSize: 17, fontWeight: 700, color: "#3a6ba8", letterSpacing: "-0.3px" },
   somedayColCount: { fontSize: 12, color: "#3f7bbf", background: "#d6e6fa", borderRadius: 10, padding: "1px 8px", fontWeight: 600 },
   colEmpty: { fontSize: 13.5, color: "#aab09c", padding: "8px 2px", fontStyle: "italic" },
 
   expensesCol: { background: "#f0f9f4", borderRadius: 16, padding: "14px 18px 20px", border: "1px solid #dcefe1" },
   expensesColHead: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 9, flexWrap: "wrap" },
-  expensesColTitle: { fontSize: 16, fontWeight: 700, color: "#2f8a5b", letterSpacing: "-0.3px" },
+  expensesColTitle: { fontSize: 17, fontWeight: 700, color: "#2f8a5b", letterSpacing: "-0.3px" },
   expensesColCount: { fontSize: 11.5, color: "#2f8a5b", background: "#d9f0e2", borderRadius: 10, padding: "2px 9px", fontWeight: 700, whiteSpace: "nowrap" },
   expenseComposer: { display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" },
   expenseNameInput: { flex: "1 1 100px", minWidth: 90, border: "1px solid #cfe6d7", borderRadius: 9, padding: "8px 10px", fontSize: 13.5, fontFamily: SANS, background: SURFACE, outline: "none", color: "#1c1917" },
@@ -1476,7 +1476,7 @@ const S = {
   expenseEdit: { border: "none", background: "none", color: "#4f9e77", cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: SANS, padding: "2px 4px" },
   expenseRowClaimed: { opacity: 0.5 },
   expenseBody: { flex: 1, minWidth: 0 },
-  expenseName: { fontSize: 14, fontWeight: 600, color: "#1c1917", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  expenseName: { fontSize: 15, fontWeight: 600, color: "#1c1917", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   expenseMeta: { fontSize: 11.5, color: "#a99c8b", marginTop: 2, whiteSpace: "nowrap" },
   expenseSide: { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1, flexShrink: 0 },
   expenseSideActions: { display: "flex", alignItems: "center", gap: 2 },
@@ -1485,8 +1485,8 @@ const S = {
   projGroups: { display: "flex", flexDirection: "column", gap: 22 },
   projGroup: {},
   projGroupHead: { display: "flex", alignItems: "center", gap: 10, marginBottom: 10, paddingBottom: 8, borderBottom: "1px solid #ece2d4" },
-  projGroupDot: { width: 11, height: 11, borderRadius: "50%", flexShrink: 0 },
-  projGroupTitle: { fontSize: 16, fontWeight: 700, color: "#1c1917", letterSpacing: "-0.3px", border: "none", background: "none", padding: 0, cursor: "pointer", fontFamily: SANS },
+  projGroupDot: { width: 12, height: 12, borderRadius: "50%", flexShrink: 0 },
+  projGroupTitle: { fontSize: 18, fontWeight: 700, color: "#1c1917", letterSpacing: "-0.4px", border: "none", background: "none", padding: 0, cursor: "pointer", fontFamily: SANS },
   projGroupCount: { fontSize: 12, color: "#a99c8b", background: "#eef2f7", borderRadius: 10, padding: "1px 8px", fontWeight: 600 },
   projGroupItems: { display: "flex", flexDirection: "column" },
 
@@ -1497,7 +1497,7 @@ const S = {
   checkOn: { background: ACCENT, borderColor: ACCENT },
   cardBody: { flex: 1, cursor: "pointer", minWidth: 0 },
   cardTopline: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 },
-  cardTitle: { fontSize: 15.5, fontWeight: 600, letterSpacing: "-0.2px" },
+  cardTitle: { fontSize: 15, fontWeight: 600, letterSpacing: "-0.2px" },
   strike: { textDecoration: "line-through" },
   cardNotes: { fontSize: 13.5, color: "#7d7264", marginTop: 4, lineHeight: 1.4 },
   cardMeta: { display: "flex", gap: 9, marginTop: 8, alignItems: "center", flexWrap: "wrap" },
@@ -1518,7 +1518,7 @@ const S = {
   moveDateInput: { width: "100%", marginTop: 8, padding: "7px 8px", border: "1px solid #e7ddd0", borderRadius: 8, fontSize: 13, fontFamily: SANS, boxSizing: "border-box", color: "#5c5247" },
   doneHead: { margin: "26px 0 12px", fontSize: 11.5, color: "#bcae9d", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700 },
 
-  projSectionHead: { fontSize: 12, fontWeight: 700, color: "#a99c8b", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 12 },
+  projSectionHead: { fontSize: 13, fontWeight: 700, color: "#a99c8b", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 12 },
   noteComposer: { display: "flex", gap: 8, marginBottom: 14 },
   noteDate: { border: "1px solid #e7ddd0", borderRadius: 9, padding: "9px 10px", fontSize: 13, fontFamily: SANS, background: SURFACE, color: "#5c5247", outline: "none" },
   noteInput: { flex: 1, border: "1px solid #e7ddd0", borderRadius: 9, padding: "9px 12px", fontSize: 14.5, fontFamily: SANS, background: SURFACE, outline: "none", color: "#1c1917" },
@@ -1526,7 +1526,7 @@ const S = {
   noteEmpty: { fontSize: 13.5, color: "#bcae9d", padding: "4px 2px" },
   noteItem: { display: "flex", alignItems: "flex-start", gap: 12, background: SURFACE, padding: "12px 14px", borderRadius: 11, border: "1px solid rgba(0,0,0,0.04)", boxShadow: "0 1px 3px rgba(45,75,65,0.04)" },
   noteItemDate: { fontSize: 11.5, fontWeight: 700, color: "#a99c8b", whiteSpace: "nowrap", paddingTop: 2, minWidth: 78 },
-  noteItemText: { flex: 1, fontSize: 14.5, color: "#3c352d", lineHeight: 1.45, whiteSpace: "pre-wrap" },
+  noteItemText: { flex: 1, fontSize: 15, color: "#3c352d", lineHeight: 1.45, whiteSpace: "pre-wrap" },
   noteDelete: { border: "none", background: "none", color: "#cbbba8", cursor: "pointer", fontSize: 13, padding: 2 },
   noteEdit: { border: "none", background: "none", color: "#7ba0cc", cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: SANS, padding: "2px 4px" },
   noteProjTag: { fontSize: 11, fontWeight: 600, color: "#3f7bbf", background: "#eaf2fc", padding: "2px 8px", borderRadius: 6, whiteSpace: "nowrap", alignSelf: "center" },
